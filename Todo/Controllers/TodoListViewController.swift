@@ -7,20 +7,21 @@
 //
 
 import UIKit
+import CoreData
 
 class TodoListViewController: UITableViewController {
 
    // var itemArray = ["Find Mike", "Buy Eggs", "Destroy mango"]
     var itemArray = [Item]()  // Making item array
     
-    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
+     let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        print(dataFilePath)
-        
-        loadItems()
+        print(FileManager.default.urls(for: .documentDirectory, in: .userDomainMask))
+    
+       loadItems()
         
     }
 
@@ -46,6 +47,9 @@ class TodoListViewController: UITableViewController {
     //MARK - TableView Delegate Method ()
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+       
+//        context.delete(itemArray[indexPath.row]) // this order is very important
+//        itemArray.remove(at: indexPath.row)
         
       itemArray[indexPath.row].done = !itemArray[indexPath.row].done
         
@@ -65,8 +69,10 @@ class TodoListViewController: UITableViewController {
         let action = UIAlertAction(title: "Add Item", style: .default) { (action) in
           //  print(textField.text)
             
-            let newItem = Item()
+           
+            let newItem = Item(context: self.context)
             newItem.title = textField.text!
+            newItem.done = false
             
             self.itemArray.append(newItem)
            
@@ -89,29 +95,49 @@ class TodoListViewController: UITableViewController {
     //MARK - Model Manipulation Methods
     
     func saveItems() {
-        let encoder = PropertyListEncoder()
-        
+       
         do {
-            let data = try encoder.encode(itemArray)
-            try data.write(to: dataFilePath!)
-            
+            try context.save()
         } catch {
-            print("Error encoding item array, \(error)")
-            
+          print("Error saving data \(error)")
         }
         
+        self.tableView.reloadData()
+    }
+    
+    func loadItems(with request : NSFetchRequest<Item> = Item.fetchRequest()) { // with is external parameter, request is inernal paramter and =Item.fetchRequest() is default value, so no need to pass parameter when calling this method
+      
+        do {
+        itemArray = try context.fetch(request)
+        } catch {
+            print("Error fetching data from context, \(error)")
+        }
         tableView.reloadData()
     }
-    func loadItems() {
-      if let data = try? Data(contentsOf: dataFilePath!) {
-            let decoder = PropertyListDecoder()
-        do {
-        itemArray = try decoder.decode([Item].self, from: data)
-        } catch {
-            print("Error decoding item array, \(error)")
+    
+}
+
+//MARK: - Search bar methods
+extension TodoListViewController: UISearchBarDelegate {
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        let request : NSFetchRequest<Item> = Item.fetchRequest()
+        //print(searchBar.text!)
+        request.predicate  = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
+        request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)]
+        
+        loadItems(with: request)
+
+    }
+    // below method is for clear search box when user go back
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        if searchBar.text?.count == 0 {
+            loadItems()
+            
+            DispatchQueue.main.async {
+                searchBar.resignFirstResponder()
+            }
+            
         }
     }
-    }
-        
 }
 
